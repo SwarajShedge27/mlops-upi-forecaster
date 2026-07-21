@@ -1,0 +1,16 @@
+{
+  "app_name": "upi-forecaster",
+  "namespace": "project",
+  "replicas": 5,
+  "image_name": "upi-forecaster:v3",
+  "container_port": 8000,
+  "service_port": 80,
+  "service_type": "ClusterIP",
+  "cpu_request": "250m",
+  "memory_request": "256Mi",
+  "cpu_limit": "500m",
+  "memory_limit": "512Mi",
+  "log_level": "INFO",
+  "default_freq": "15min",
+  "domain_name": "api.forecaster.local"
+}
