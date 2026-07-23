@@ -1,6 +1,7 @@
 import sys
 import os
 from pathlib import Path
+from typing import Annotated, Literal
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query
 from fastapi.responses import Response  # Import Response to return files
 import requests 
@@ -38,11 +39,17 @@ def health_check():
 @app.post("/forecast", status_code=200)
 def run_forecasting_pipeline(
     file: UploadFile = File(...),
-    horizon: int = Query(96, description="Forecast horizon h (number of intervals)"),
-    freq: str = Query("15min", description="Time series step frequency"),
-    season_length: int = Query(96, description="Seasonal cycle length")
+    horizon: Annotated[int,Query(ge=1,le=500,description="Forecast horizon")] = 96,
+    freq: Literal["15min","30min","1H","1D"] = Query("15min"),
+    season_length: int = Query(default=96,ge=2,le=500,description="Supported seasonal cycle lengths are 24, 48, 96, 168")
 ):
    
+    allowed_values = {24, 48, 96, 168}
+
+    if season_length not in allowed_values:
+        raise HTTPException(status_code=400,detail="season_length must be one of: 24, 48, 96, or 168.")
+
+
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only CSV files are accepted.")
 
@@ -51,19 +58,31 @@ def run_forecasting_pipeline(
 
         df_raw, warnings = validate_and_ingest_data(file_bytes)
 
+        if df_raw.empty:
+            raise HTTPException(status_code=400,detail="CSV contains no records.")
+
         df_clean = preprocess_and_clean_data(df_raw, freq=freq)
 
         train_df, val_df = split_train_val_dynamic(df_clean)
 
+        if train_df.empty:
+            raise HTTPException(status_code=400,detail="Training dataset is empty.")
+
+        if val_df.empty:
+            raise HTTPException(status_code=400,detail="Validation dataset is empty.")
+
         val_h = len(val_df["ds"].unique())
 
         sf_ets, sf_baseline = train_models_in_memory(train_df, freq=freq, season_length=season_length)
+        if sf_ets is None:
+            raise HTTPException(status_code=500,detail="AutoETS training failed.")
+
+        if sf_baseline is None:
+            raise HTTPException(status_code=500,detail="Baseline model training failed.")
 
         # Extract the scores sub-dictionary from the returned results
         evaluation_results = evaluate_models_in_memory(val_df, sf_ets, sf_baseline, h=val_h)
         metrics = evaluation_results["scores"]
-
-        # metrics = evaluate_models_in_memory(val_df, sf_ets, sf_baseline, h=val_h)
         
         print("\n" + "="*30)
         print("EVALUATION METRICS")
@@ -73,6 +92,8 @@ def run_forecasting_pipeline(
         print("="*30 + "\n")
 
         forecast_df = generate_future_forecast_dynamic(df_clean, h=horizon, freq=freq, season_length=season_length)
+        if forecast_df.empty:
+            raise HTTPException(status_code=500,detail="Forecast generation failed.")
 
         # Convert the forecast DataFrame into tabular CSV string
         csv_data = forecast_df.to_csv(index=False)
@@ -95,11 +116,16 @@ def run_forecasting_pipeline(
 @app.post("/forecast/json", status_code=200)
 def run_forecasting_pipeline_json(
     file: UploadFile = File(...),
-    horizon: int = Query(96, description="Forecast horizon h (number of intervals)"),
-    freq: str = Query("15min", description="Time series step frequency"),
-    season_length: int = Query(96, description="Seasonal cycle length")
+    horizon: Annotated[int,Query(ge=1,le=500,description="Forecast horizon")] = 96,
+    freq: Literal["15min","30min","1H","1D"] = Query("15min"),
+    season_length: int = Query(default=96,ge=2,le=500,description="Supported seasonal cycle lengths are 24, 48, 96, 168")
 ):
     
+    allowed_values = {24, 48, 96, 168}
+
+    if season_length not in allowed_values:
+        raise HTTPException(status_code=400,detail="season_length must be one of: 24, 48, 96, or 168.")
+
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only CSV files are accepted.")
 
@@ -107,20 +133,36 @@ def run_forecasting_pipeline_json(
         file_bytes = file.file.read()
 
         df_raw, warnings = validate_and_ingest_data(file_bytes)
+        if df_raw.empty:
+            raise HTTPException(status_code=400,detail="CSV contains no records.")
 
         df_clean = preprocess_and_clean_data(df_raw, freq=freq)
 
         train_df, val_df = split_train_val_dynamic(df_clean)
+        if train_df.empty:
+            raise HTTPException(status_code=400,detail="Training dataset is empty.")
+
+        if val_df.empty:
+            raise HTTPException(status_code=400,detail="Validation dataset is empty.")
 
         val_h = len(val_df["ds"].unique())
 
         sf_ets, sf_baseline = train_models_in_memory(train_df, freq=freq, season_length=season_length)
+        if sf_ets is None:
+            raise HTTPException(status_code=500,detail="AutoETS training failed.")
+
+        if sf_baseline is None:
+            raise HTTPException(status_code=500,detail="Baseline model training failed.")
 
         evaluation_results = evaluate_models_in_memory(val_df, sf_ets, sf_baseline, h=val_h)
         metrics = evaluation_results["scores"]
         val_predictions = evaluation_results["val_predictions"]
 
         forecast_df = generate_future_forecast_dynamic(df_clean, h=horizon, freq=freq, season_length=season_length)
+
+        if forecast_df.empty:
+            raise HTTPException(status_code=500,detail="Forecast generation failed.")
+
         forecasts_list = forecast_df.to_dict(orient="records")
 
         return {

@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Optional, Literal
+import re
 
 K8S_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = K8S_DIR / "config.json"
@@ -9,9 +10,9 @@ OLLAMA_API_URL = "http://localhost:11434/api/chat"
 
 DEFAULT_CONFIG = {
     "app_name": "upi-forecaster",
-    "namespace": "my-prj",
+    "namespace": "project",
     "replicas": 3,
-    "image_name": "upi-dynamic-api:v1",
+    "image_name": "upi-forecaster:v4",
     "container_port": 8000,
     "service_port": 80,
     "service_type": "ClusterIP",
@@ -21,7 +22,7 @@ DEFAULT_CONFIG = {
     "memory_limit": "512Mi",
     "log_level": "INFO",
     "default_freq": "15min",
-    "domain_name": "api.forecaster.local"
+    "domain_name": "127.0.0.1.nip.io"
 }
 
 class K8sConfigUpdate(BaseModel):
@@ -41,52 +42,51 @@ class K8sConfigUpdate(BaseModel):
     domain_name: Optional[str] = Field(None, pattern=r"^[a-z0-9.-]+$")
 
 KEY_ALIASES = {
-    "app_name": ["app_name", "app", "name"],
-    "namespace": ["namespace", "ns"],
+    "app_name": ["app_name", "app", "name","app name"],
+    "namespace": ["namespace", "ns","name space"],
     "replicas": ["replicas", "replica", "pods", "instances", "count"],
-    "image_name": ["image_name", "image", "img"],
-    "container_port": ["container_port", "port"],
-    "service_port": ["service_port", "svc_port"],
-    "service_type": ["service_type", "type"],
-    "cpu_request": ["cpu_request", "cpu_req", "cpu"],
-    "memory_request": ["memory_request", "memory_req", "mem_req", "memory"],
-    "cpu_limit": ["cpu_limit", "cpu_lim"],
-    "memory_limit": ["memory_limit", "mem_limit", "mem"],
-    "log_level": ["log_level", "log"],
-    "default_freq": ["default_freq", "freq", "frequency"],
-    "domain_name": ["domain_name", "domain", "host"]
+    "image_name": ["image_name", "image", "img","image name"],
+    "container_port": ["container_port", "port","container port"],
+    "service_port": ["service_port", "svc_port","service port"],
+    "service_type": ["service_type", "type","service type"],
+    "cpu_request": ["cpu_request", "cpu_req", "cpu","cpu request"],
+    "memory_request": ["memory_request", "memory_req", "mem_req", "memory","memory request"],
+    "cpu_limit": ["cpu_limit", "cpu_lim","cpu limit"],
+    "memory_limit": ["memory_limit", "mem_limit", "mem","memory limit"],
+    "log_level": ["log_level", "log","log level"],
+    "default_freq": ["default_freq", "freq", "frequency","default freq"],
+    "domain_name": ["domain_name", "domain", "host","domain name"]
 }
 
-SYSTEM_INSTRUCTION = """
-You are a Kubernetes deployment assistant. Read the user's change request.
-Output a JSON dictionary containing ONLY the key-value pairs that the user explicitly wants to change.
 
-Available Keys:
-- app_name (string)
-- namespace (string)
-- replicas (integer)
-- image_name (string)
-- container_port (integer)
-- service_port (integer)
-- service_type (string: ClusterIP, NodePort, or LoadBalancer)
-- cpu_request (string)
-- memory_request (string)
-- cpu_limit (string)
-- memory_limit (string)
-- log_level (string)
-- default_freq (string)
-- domain_name (string)
+SYSTEM_INSTRUCTION = """You are a strict Kubernetes configuration extractor.
 
-RULES FOR KEY MATCHING:
-1. ALLOW COMMON ALIASES AND SHORTHAND:
-   - "img", "image", "img name" -> "image_name"
-   - "cpu", "cpu req" -> "cpu_request"
-   - "mem", "memory limit" -> "memory_limit"
-   - "port" -> "container_port"
-   - "replica", "pods count" -> "replicas"
+Extract the requested updates from the user prompt and format them as a JSON object matching this schema:
+- app_name: string
+- namespace: string
+- replicas: integer
+- image_name: string
+- container_port: integer
+- service_port: integer
+- service_type: "ClusterIP" | "NodePort" | "LoadBalancer"
+- cpu_request: string
+- cpu_limit: string
+- memory_request: string
+- memory_limit: string
+- log_level: "INFO" | "DEBUG" | "WARNING"
+- default_freq: string
+- domain_name: string
 
-2. REJECT GIBBERISH:
-   - If the input is completely unrecognized or cannot be confidently matched to an available key, output: {}
+Rules:
+1. Return ONLY the JSON object. Do not include markdown code blocks or explanations.
+2. Extract ONLY the fields explicitly mentioned in the user prompt. Do not invent or include other fields.
+
+Examples:
+User: "scale deployment to 5 replicas"
+Output: {"replicas": 5}
+
+User: "change log_level to warning"
+Output: {"log_level": "WARNING"}
 """
 
 def load_current_config() -> dict:
@@ -97,3 +97,45 @@ def load_current_config() -> dict:
         except Exception:
             pass
     return DEFAULT_CONFIG.copy()
+
+def has_modification_intent(prompt: str) -> bool:
+    
+    prompt_lower = prompt.lower().strip()
+    
+    intent_verbs = {
+        "scale", "change", "update", "set", "modify", "increase", 
+        "decrease", "reset", "make", "put", "use", "deploy", "apply"
+    }
+    
+    transition_words = {"to", "is", "=", "become", "value","as"}
+    words = set(prompt_lower.split())
+    
+    has_verb = not words.isdisjoint(intent_verbs)
+    has_transition = not words.isdisjoint(transition_words)
+    
+    return has_verb or has_transition
+
+def has_valid_parameters(prompt: str) -> bool:
+   
+    prompt_lower = prompt.lower().strip()
+    
+    matched_keys = []
+    for key, aliases in KEY_ALIASES.items():
+        if any(alias in prompt_lower for alias in aliases):
+            matched_keys.append(key)
+            
+    if not matched_keys:
+        return False
+        
+    for key in matched_keys:
+        if key in ["replicas", "container_port", "service_port"]:
+            if not any(word.isdigit() for word in prompt_lower.split() if re.search(r'\d+', word)):
+                return False
+        elif key in ["cpu_request", "cpu_limit"]:
+            if not re.search(r'\d+m?', prompt_lower):
+                return False
+        elif key in ["memory_request", "memory_limit"]:
+            if not re.search(r'\d+(mi|gi|ki|m|g|k)?', prompt_lower):
+                return False
+                
+    return True

@@ -6,7 +6,8 @@ import requests
 
 from k8s_config import (
     K8S_DIR, CONFIG_PATH, OLLAMA_API_URL, DEFAULT_CONFIG, 
-    K8sConfigUpdate, KEY_ALIASES, SYSTEM_INSTRUCTION, load_current_config
+    K8sConfigUpdate, KEY_ALIASES, SYSTEM_INSTRUCTION, load_current_config,
+    has_modification_intent, has_valid_parameters
 )
 from kubectl_helper import (
     run_kubectl_command, sanitize_namespace, get_namespaces, 
@@ -51,6 +52,17 @@ if page == "AI Manifest Configurator":
             if not user_prompt:
                 st.warning("Please describe your changes first.")
             else:
+                
+                if not has_modification_intent(user_prompt):
+                    st.error("Invalid Command: No modification intent detected.")
+                    st.warning("Please specify an action (e.g. 'scale replicas to 3', 'change namespace to dev').")
+                    st.stop()
+                    
+                if not has_valid_parameters(user_prompt):
+                    st.error("Invalid Command: Unrecognized parameter or missing value.")
+                    st.warning("Please make sure you are changing a valid parameter and providing a value (e.g., 'replicas to 5', 'cpu to 250m').")
+                    st.stop()
+                    
                 payload = {
                     "model": "llama3.2",
                     "messages": [
@@ -221,7 +233,7 @@ elif page == "Cluster Management Console":
         with l_col1:
             selected_pod = st.selectbox("Select Pod:", active_pods)
         with l_col2:
-            tail_lines = st.number_input("Tail Lines:", min_value=10, max_value=500, value=50, step=10)
+            tail_lines = st.number_input("Tail Lines:", min_value=10, max_value=500, value=30, step=10)
         with l_col3:
             st.write("")
             st.write("")
@@ -239,7 +251,7 @@ elif page == "Cluster Management Console":
                 st.code(log_res["stderr"], language="text")
 
     st.markdown("---")
-    st.subheader("Deep Resource Inspector (kubectl describe)")
+    st.subheader("Resource Inspector (kubectl describe)")
     d_col1, d_col2 = st.columns([1, 2])
     with d_col1:
         res_kind = st.radio("Resource Type:", ["Pod", "Deployment", "Service"], horizontal=True)

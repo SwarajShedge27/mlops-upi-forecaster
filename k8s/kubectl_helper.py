@@ -57,12 +57,13 @@ def get_pod_names(namespace: str) -> list[str]:
     return []
 
 def get_deployment_names(namespace: str) -> list[str]:
-    """Returns list of deployment names in target namespace."""
     res = run_kubectl_command(["get", "deployments", "-n", sanitize_namespace(namespace), "-o", "jsonpath={.items[*].metadata.name}"])
     return res["stdout"].split() if res["success"] and res["stdout"] else []
 
+#JSONPath is a query language used to extract specific values from a JSON document.
+# .items[*].metadata.name extracts the name of every deployment returned by kubectl.
+
 def get_service_names(namespace: str) -> list[str]:
-    """Returns list of service names in target namespace."""
     res = run_kubectl_command(["get", "services", "-n", sanitize_namespace(namespace), "-o", "jsonpath={.items[*].metadata.name}"])
     return res["stdout"].split() if res["success"] and res["stdout"] else []
 
@@ -70,3 +71,4 @@ def check_cluster_connection() -> dict:
     
     res = run_kubectl_command(["cluster-info"], timeout=3)
     return res
+

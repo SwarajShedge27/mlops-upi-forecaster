@@ -6,7 +6,7 @@ metadata:
   labels:
     app: upi-forecaster
 spec:
-  replicas: 5
+  replicas: 2
   selector:
     matchLabels:
       app: upi-forecaster
@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: upi-forecaster-container
-        image: upi-forecaster:v3
+        image: upi-forecaster:v4
         imagePullPolicy: IfNotPresent
         ports:
         - name: backend-port
