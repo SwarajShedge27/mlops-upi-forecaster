@@ -1,5 +1,12 @@
 FROM python:3.11-slim
 
+# Python runtime settings:
+# - PYTHONUNBUFFERED=1: Sends Python stdout/stderr directly to the terminal
+#   without buffering, allowing logs to appear immediately (useful for Docker logs).
+# - PYTHONDONTWRITEBYTECODE=1: Prevents Python from generating .pyc bytecode
+#   files, reducing unnecessary file creation inside the container.
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 

@@ -12,7 +12,7 @@ TARGET_COL = "y"
 
 FREQ = "15min"
 SEASON_LENGTH = 96  
-ETS_MODEL = "MMM"   
+ETS_MODEL = "ZZZ"   
 
 OUTPUTS_DIR = BASE_DIR / "outputs"
 METRICS_PATH = OUTPUTS_DIR / "metrics.json"

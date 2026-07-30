@@ -12,10 +12,9 @@ def calculate_wmape(y_true: pd.Series, y_pred: pd.Series) -> float:
         return 0.0
     return float((np.sum(np.abs(y_true - y_pred)) / total_actual) * 100)
 
-def evaluate_models_in_memory(val_df: pd.DataFrame, sf_ets: StatsForecast, sf_baseline: StatsForecast, h: int) -> dict:
+def evaluate_models_in_memory(val_df: pd.DataFrame, sf_ets: StatsForecast, sf_baseline: StatsForecast, h: int) -> dict:   
     val_df = val_df.copy()
 
-    # Predict validation steps and reset the index to convert unique_id to a column
     forecast_ets = sf_ets.predict(h=h).reset_index()
     forecast_baseline = sf_baseline.predict(h=h).reset_index()
 
@@ -23,7 +22,10 @@ def evaluate_models_in_memory(val_df: pd.DataFrame, sf_ets: StatsForecast, sf_ba
     forecast_ets["ds"] = pd.to_datetime(forecast_ets["ds"])
     forecast_baseline["ds"] = pd.to_datetime(forecast_baseline["ds"])
 
-    # Merge true validation target values and predictions
+    val_df["unique_id"] = val_df["unique_id"].astype(str)
+    forecast_ets["unique_id"] = forecast_ets["unique_id"].astype(str)
+    forecast_baseline["unique_id"] = forecast_baseline["unique_id"].astype(str)
+ 
     merged = val_df.merge(forecast_ets, on=["unique_id", "ds"], how="left")
     merged = merged.merge(forecast_baseline, on=["unique_id", "ds"], how="left")
 
@@ -39,14 +41,10 @@ def evaluate_models_in_memory(val_df: pd.DataFrame, sf_ets: StatsForecast, sf_ba
     wmape_baseline = calculate_wmape(y_true, y_pred_baseline)
     rmse_baseline = float(np.sqrt(np.mean((y_true - y_pred_baseline) ** 2)))
 
-    # Map the short unique_id codes to their full gateway names (matching the frontend)
-    inverse_mapping = {"A": "CITIBANKUPI", "B": "PAYTMPGUPI", "C": "YESBANKUPI"}
     merged["unique_id"] = merged["unique_id"].astype(str)
-    merged["PG_NAME"] = merged["unique_id"].map(inverse_mapping)
-
-    # Convert the prediction columns to string/float representations for JSON
     merged["ds"] = merged["ds"].dt.strftime("%Y-%m-%d %H:%M:%S")
-    val_preds_list = merged[["PG_NAME", "ds", "y", "AutoETS", "Naive"]].to_dict(orient="records")
+   
+    val_preds_list = merged[["unique_id", "ds", "y", "AutoETS", "Naive"]].to_dict(orient="records")
 
     return {
         "scores": {

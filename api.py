@@ -36,19 +36,19 @@ def health_check():
     
     raise HTTPException(status_code=503, detail="Frontend service is unreachable.")
 
+
 @app.post("/forecast", status_code=200)
-def run_forecasting_pipeline(
+def run_forecasting_pipeline_json(
     file: UploadFile = File(...),
     horizon: Annotated[int,Query(ge=1,le=500,description="Forecast horizon")] = 96,
-    freq: Literal["15min","30min","1H","1D"] = Query("15min"),
-    season_length: int = Query(default=96,ge=2,le=500,description="Supported seasonal cycle lengths are 24, 48, 96, 168")
+    freq: Literal["15min","30min","1H","1D","7D","30D","365D"] = Query("15min"),
+    season_length: int = Query(default=96,ge=2,le=500,description="Supported seasonal cycle lengths are 24, 48, 96, 168"),
+    model_type: str = Query(default="ZZZ", description="AutoETS Model configuration string (e.g. ZZZ, MMM, AAA)")
 ):
-   
-    allowed_values = {24, 48, 96, 168}
 
+    allowed_values = {1, 7, 12, 24, 48, 52, 96, 168, 365}
     if season_length not in allowed_values:
-        raise HTTPException(status_code=400,detail="season_length must be one of: 24, 48, 96, or 168.")
-
+        raise HTTPException(status_code=400,detail="season_length must be one of: 1, 7, 12, 24, 48, 52, 96, 168, or 365.")
 
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only CSV files are accepted.")
@@ -57,7 +57,6 @@ def run_forecasting_pipeline(
         file_bytes = file.file.read()
 
         df_raw, warnings = validate_and_ingest_data(file_bytes)
-
         if df_raw.empty:
             raise HTTPException(status_code=400,detail="CSV contains no records.")
 
@@ -73,7 +72,8 @@ def run_forecasting_pipeline(
 
         val_h = len(val_df["ds"].unique())
 
-        sf_ets, sf_baseline = train_models_in_memory(train_df, freq=freq, season_length=season_length)
+        sf_ets, sf_baseline = train_models_in_memory(train_df, freq=freq, season_length=season_length, model_type=model_type)
+
         if sf_ets is None:
             raise HTTPException(status_code=500,detail="AutoETS training failed.")
 
@@ -112,19 +112,19 @@ def run_forecasting_pipeline(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Pipeline execution error: {str(e)}")
 
-
 @app.post("/forecast/json", status_code=200)
 def run_forecasting_pipeline_json(
     file: UploadFile = File(...),
     horizon: Annotated[int,Query(ge=1,le=500,description="Forecast horizon")] = 96,
-    freq: Literal["15min","30min","1H","1D"] = Query("15min"),
-    season_length: int = Query(default=96,ge=2,le=500,description="Supported seasonal cycle lengths are 24, 48, 96, 168")
+    freq: Literal["15min","30min","1H","1D","7D","30D","365D"] = Query("15min"),
+    season_length: int = Query(default=96,ge=2,le=500,description="Supported seasonal cycle lengths are 24, 48, 96, 168"),
+    model_type: str = Query(default="ZZZ", description="AutoETS Model configuration string (e.g. ZZZ, MMM, AAA)")
 ):
-    
-    allowed_values = {24, 48, 96, 168}
 
+    allowed_values = {1, 7, 12, 24, 48, 52, 96, 168, 365}
     if season_length not in allowed_values:
-        raise HTTPException(status_code=400,detail="season_length must be one of: 24, 48, 96, or 168.")
+        raise HTTPException(status_code=400,detail="season_length must be one of: 1, 7, 12, 24, 48, 52, 96, 168, or 365.")
+
 
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only CSV files are accepted.")
@@ -147,7 +147,7 @@ def run_forecasting_pipeline_json(
 
         val_h = len(val_df["ds"].unique())
 
-        sf_ets, sf_baseline = train_models_in_memory(train_df, freq=freq, season_length=season_length)
+        sf_ets, sf_baseline = train_models_in_memory(train_df, freq=freq, season_length=season_length, model_type=model_type)
         if sf_ets is None:
             raise HTTPException(status_code=500,detail="AutoETS training failed.")
 

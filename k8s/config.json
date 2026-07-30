@@ -1,7 +1,7 @@
 {
   "app_name": "upi-forecaster",
   "namespace": "project",
-  "replicas": 2,
+  "replicas": 3,
   "image_name": "upi-forecaster:v4",
   "container_port": 8000,
   "service_port": 80,

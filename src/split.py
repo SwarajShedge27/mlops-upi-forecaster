@@ -5,19 +5,10 @@ def split_train_val_dynamic(df: pd.DataFrame, date_col: str = "ds") -> tuple[pd.
     df = df.copy()
     df[date_col] = pd.to_datetime(df[date_col])
 
-    # Dataset Size Constraint: Ensure each series has at least 500 unique timestamps
-    for gateway_id, group in df.groupby("unique_id"):
-        unique_points = len(group[date_col].unique())
-        if unique_points < 500:
-            raise ValueError(
-                f"Gateway series '{gateway_id}' contains only {unique_points} unique timestamps. "
-                f"A minimum of 500 points per series is required for training."
-            )
-
     unique_timestamps = sorted(df[date_col].unique())
     total_timestamps = len(unique_timestamps)
 
-    split_index = int(total_timestamps * 0.8)
+    split_index = int(total_timestamps * 0.90)
     split_timestamp = unique_timestamps[split_index]
 
     train_data = df[df[date_col] <= split_timestamp]

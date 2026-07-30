@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-def _boundary_creation(df_count: pd.DataFrame, sdval: int = 2, mycol: str = "y", mydcol: str = "ds", bucket: str = "15min", aggtype=sum, iteration: int = 3, value_format: int = 2) -> pd.DataFrame:
+def _boundary_creation(df_count: pd.DataFrame, sdval: int = 2, mycol: str = "y", mydcol: str = "ds", bucket: str = "15min", aggtype="sum", iteration: int = 3, value_format: int = 2) -> pd.DataFrame:
 
     df_count = df_count.copy()
     df_count[mydcol] = pd.to_datetime(df_count[mydcol])

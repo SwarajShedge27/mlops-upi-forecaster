@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 import streamlit as st
 import requests
+import re
 
 from k8s_config import (
     K8S_DIR, CONFIG_PATH, OLLAMA_API_URL, DEFAULT_CONFIG, 
@@ -83,11 +84,62 @@ if page == "AI Manifest Configurator":
                             llm_updates = json.loads(content_str)
                             
                             prompt_lower = user_prompt.lower()
+                
                             verified_updates = {}
                             for key, value in llm_updates.items():
                                 aliases = KEY_ALIASES.get(key, [key])
                                 if any(alias in prompt_lower for alias in aliases):
                                     verified_updates[key] = value
+
+                            # --- CASE CAPITALIZATION & PUNCTUATION NORMALIZATION ---
+                            for key, value in list(verified_updates.items()):
+                                if isinstance(value, str):
+                                    
+                                    cleaned_val = value.replace(" ", "").rstrip(".,")
+                                    
+                                    if key in ["replicas", "container_port", "service_port"]:
+                                        try:
+                                            verified_updates[key] = int(cleaned_val)
+                                        except ValueError:
+                                            pass
+                                            
+                                    elif key in ["memory_request", "memory_limit"]:
+                                        match = re.match(r"^(\d+)([a-zA-Z]+)?$", cleaned_val)
+                                        if match:
+                                            num = match.group(1)
+                                            unit = match.group(2)
+                                            if unit:
+                                                unit_lower = unit.lower()
+                                                if "g" in unit_lower:
+                                                    cleaned_val = f"{num}Gi"
+                                                elif "m" in unit_lower:
+                                                    cleaned_val = f"{num}Mi"
+                                                elif "k" in unit_lower:
+                                                    cleaned_val = f"{num}Ki"
+                                                elif "t" in unit_lower:
+                                                    cleaned_val = f"{num}Ti"
+                                            verified_updates[key] = cleaned_val
+                                            
+                                    elif key in ["cpu_request", "cpu_limit"]:
+                                        cleaned_val = re.sub(r"(cores|core|cpus|cpu)", "", cleaned_val, flags=re.IGNORECASE)
+                                        if cleaned_val.endswith("M"):
+                                            cleaned_val = cleaned_val[:-1] + "m"
+                                        verified_updates[key] = cleaned_val
+                                    else:
+                                        verified_updates[key] = cleaned_val
+
+                            if "service_type" in verified_updates and isinstance(verified_updates["service_type"], str):
+                                s_type_lower = verified_updates["service_type"].lower().strip()
+                                type_mapping = {
+                                    "clusterip": "ClusterIP",
+                                    "nodeport": "NodePort",
+                                    "loadbalancer": "LoadBalancer"
+                                }
+                                if s_type_lower in type_mapping:
+                                    verified_updates["service_type"] = type_mapping[s_type_lower]
+
+                            if "log_level" in verified_updates and isinstance(verified_updates["log_level"], str):
+                                verified_updates["log_level"] = verified_updates["log_level"].upper().strip()
 
                             if not verified_updates:
                                 st.error("Unrecognized or invalid parameter name.")
@@ -116,6 +168,27 @@ if page == "AI Manifest Configurator":
                         st.error("Connection failed. Ensure Ollama server is running locally.")
                     except Exception as e:
                         st.error(f"Processing failed: {str(e)}")
+       
+        st.write("")  
+        with st.expander("View Allowed Configurations & Prompt Examples", expanded=False):
+            st.markdown("""
+            You can modify the following configuration values using natural English:
+            
+            | Configuration Key | Allowed Formats / Values | Example Prompt |
+            | :--- | :--- | :--- |
+            | **Replicas** | Numbers between 1 and 49 | *“scale deployment to 5 replicas”* |
+            | **Namespace** | Standard string text | *“change namespace to staging”* |
+            | **Service Type** | `ClusterIP`, `NodePort`, `LoadBalancer` | *“set service type to NodePort”* |
+            | **Ports** | Integer values (1 - 65535) | *“set container port to 8080 and service port to 80”* |
+            | **Memory** | Suffixes: `Mi`, `Gi`, `Ki` | *“set memory limit to 512Mi and memory request to 256Mi”* |
+            | **CPU** | Suffixes: `m` (millicores) or decimal cores | *“set cpu request to 250m and cpu limit to 0.5 cores”* |
+            | **Log Level** | `INFO`, `DEBUG`, `WARNING` | *“change log level to warning”* |
+            | **Default Frequency**| Intervals like `15min`, `1H`, `1D`, `30D` | *“set default freq to 30D”* |
+            | **Domain Name** | Domain address formats | *“change domain name to forecaster.nip.io”* |
+            
+            
+            """)
+
 
     st.markdown("---")
     st.subheader("Generated Manifest Previews")
