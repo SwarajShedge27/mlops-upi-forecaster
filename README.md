@@ -38,7 +38,6 @@ MLOps-Project/
 
 The forecasting pipeline is fully generic and accepts any category-based sequential data (e.g. transaction counts, telemetry, volume indexes) mapping them dynamically in memory.
 
-### **Technical Capabilities**
 * **Rolling 3-Sigma Outlier Cleaning**: Computes rolling standard deviations ($\sigma$) and means ($\mu$) grouped by time buckets over 3 iterations to identify, remove, and interpolate telemetry spikes.
 * **Frequency Rescaling & Alignment**: Automatically spaces irregular datetimes into rigid fixed gaps (like monthly boundaries) so StatsForecast matrix engines compile without errors.
 * **Chronological Splits**: Isolates final 10% blocks for out-of-sample validation to prevent data leakage.
@@ -51,7 +50,6 @@ The forecasting pipeline is fully generic and accepts any category-based sequent
 
 An interactive terminal where users apply deployment configurations using conversational English prompts, compiled and executed on a local Kubernetes cluster.
 
-### **Technical Capabilities**
 * **Local LLM Extraction**: Routes prompt modifications to a local **Ollama** server running **Llama 3.2 (3B)** to translate text changes into configuration keys.
 * **Double-Pass Validation Guards**:
   * **Pass 1 (Pre-LLM)**: Validates intent keywords and filters word-numbers (like `"three"` $\to$ `3`).
@@ -61,7 +59,7 @@ An interactive terminal where users apply deployment configurations using conver
 
 ---
 
-## 🚀 Getting Started (Step-by-Step Instructions)
+## 🚀 Execution & Setup Guide
 
 ### **Prerequisites**
 * Python 3.10+
@@ -71,86 +69,86 @@ An interactive terminal where users apply deployment configurations using conver
   ollama pull llama3.2
   ```
 
-### **1. Local Environment Installation**
-Clone this repository, create a virtual environment, and install dependencies:
-```bash
-python -m venv myenv
-source myenv/bin/activate  # On Windows: myenv\Scripts\activate
-pip install -r requirements.txt
-```
+---
 
-### **2. Running the Forecasting Dashboard Locally**
-1. **Start the FastAPI Backend**:
-   Open a terminal window and run:
+### **Option A: Running Locally with Python**
+
+1. **Environment Setup**:
+   ```bash
+   python -m venv myenv
+   source myenv/bin/activate  # On Windows: myenv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+2. **Start the FastAPI Backend**:
    ```bash
    python -m uvicorn api:app --reload --port 8000
    ```
-2. **Start the Streamlit User Interface**:
-   Open a new terminal window and run:
+3. **Start the Streamlit User Interface**:
+   In a new terminal window:
    ```bash
    streamlit run app.py
    ```
-3. **Access App**: Open your browser at `http://localhost:8501`.
-
-### **3. Running the Kubernetes GitOps Portal**
-1. **Ensure Ollama is running**: Make sure Ollama is open in the background.
-2. **Launch the Streamlit K8s Dashboard**:
-   Open a new terminal window and run:
-   ```bash
-   streamlit run k8s/llm_frontend.py --server.port 8502
-   ```
-3. **Access Portal**: Open your browser at `http://localhost:8502`.
+   Open `http://localhost:8501` to use the forecaster.
 
 ---
 
-## 🛠️ Kubernetes Deployment & Port Forwarding
+### **Option B: Running Locally with Docker**
 
-Once you compile and generate manifests inside the K8s Portal, follow these instructions to deploy, inspect, and route traffic to your local Kubernetes cluster.
-
-### **1. Apply the Manifests to your Cluster**
-You can deploy your generated configuration directly using the button in the UI, or manually via terminal:
-```bash
-# Go to your project directory
-cd "C:\Users\Swaraj Shedge\Desktop\MLOps Project"
-
-# Apply all compiled YAML files from the build directory to your namespace (e.g. 'project')
-kubectl apply -f k8s/build/ -n project
-```
-
-### **2. Verify the Resources are Running**
-Check the status of your deployments, pods, and services:
-```bash
-# Check running pods in your namespace
-kubectl get pods -n project
-
-# Check active service configurations
-kubectl get svc -n project
-```
-
-### **3. Binding Local Ports to Running Pods (Port Forwarding)**
-Because local cluster services run inside private virtual namespaces, you must bind your physical host ports to your running pods to access them.
-
-1. **Find your running pod name**:
+1. **Build the Docker Image**:
+   Open a terminal in the project root and build the unified image containing both API and Frontend:
    ```bash
-   kubectl get pods -n project
+   docker build -t upi-forecaster:v4 .
    ```
-   *Expected Output example:*
-   `pod/upi-forecaster-deployment-57ea996abfd2ffc42e84`
-2. **Bind your local host port (e.g. 8501) to the Pod's target port (e.g. 8501)**:
+2. **Run the Docker Container**:
+   Run the container mapping both ports (FastAPI on 8000 and Streamlit on 8501):
    ```bash
-   kubectl port-forward pod/<your-pod-name> 8501:8501 -n project
+   docker run -d -p 8000:8000 -p 8501:8501 --name forecaster-app upi-forecaster:v4
    ```
-3. **Access service**: You can now navigate to `http://localhost:8501` to view the service running inside the Kubernetes container.
+3. **Access Services**:
+   * Dashboard UI: `http://localhost:8501`
+   * API endpoints: `http://localhost:8000/docs`
 
-### **4. Troubleshooting Socket Disconnects / Broken Pipes**
-If you roll out configuration changes (like scaling replicas or changing namespaces) or if the pod goes idle, you will lose connection and see this error:
-`lost connection to pod / readfrom tcp4: broken pipe`
+---
 
-* **Why it happens**: When configurations update, Kubernetes terminates the old pod and rolls out a new one. The port-forward session is tied to the old pod ID.
-* **How to fix**:
-  1. Terminate the active port-forward command in your terminal (`Ctrl + C`).
-  2. List the new active pod name: `kubectl get pods -n project`.
-  3. Start a new port-forward session pointing to the new pod name:
+### **Option C: Pushing Image to Docker Hub**
+
+1. **Tag the Docker Image**:
+   ```bash
+   docker tag upi-forecaster:v4 <your-dockerhub-username>/upi-forecaster:latest
+   ```
+2. **Push the Image**:
+   ```bash
+   docker push <your-dockerhub-username>/upi-forecaster:latest
+   ```
+
+---
+
+### **Option D: Deploying inside Kubernetes (Minikube / Docker Desktop)**
+
+1. **Start the AI Configurator Portal**:
+   Ensure Ollama is running, then start the GitOps Streamlit app:
+   ```bash
+   streamlit run k8s/llm_frontend.py --server.port 8502
+   ```
+   Open `http://localhost:8502` to use the AI Portal.
+2. **Compile Manifests**:
+   Describe your configuration changes (e.g. *"scale replicas to 5, set service type to NodePort"*) in the AI input and apply them to compile the YAML files into the `k8s/build/` directory.
+3. **Deploy manifests via terminal**:
+   ```bash
+   kubectl apply -f k8s/build/ -n project
+   ```
+4. **Access the deployed service (Port Forwarding)**:
+   * Get the pod name:
      ```bash
-     kubectl port-forward pod/<new-pod-name> 8501:8501 -n project
+     kubectl get pods -n project
      ```
+   * Bind the host port to the running pod:
+     ```bash
+     kubectl port-forward pod/<your-pod-name> 8501:8501 -n project
+     ```
+   * Open `http://localhost:8501` to view the service.
+5. **Rollout updates**:
+   If you rebuild a new container image with updates, use a new version tag (e.g. `upi-forecaster:v5`) or force a rollout restart:
+   ```bash
+   kubectl rollout restart deployment/upi-forecaster-deployment -n project
+   ```
