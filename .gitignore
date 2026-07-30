@@ -17,3 +17,6 @@ Thumbs.db
 data/outputs/
 *.log
 data/
+
+outputs/
+notebooks/
