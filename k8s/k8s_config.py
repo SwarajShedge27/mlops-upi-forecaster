@@ -147,14 +147,6 @@ def has_modification_intent(prompt: str) -> bool:
     
     return has_verb or has_transition
 
-# def has_valid_parameters(prompt: str) -> bool:
-   
-#     prompt_lower = prompt.lower().strip()
-    
-#     matched_keys = []
-#     for key, aliases in KEY_ALIASES.items():
-#         if any(alias in prompt_lower for alias in aliases):
-#             matched_keys.append(key)
 
 def has_valid_parameters(prompt: str) -> bool:
    
@@ -179,11 +171,6 @@ def has_valid_parameters(prompt: str) -> bool:
             if not (any(word.isdigit() for word in prompt_words if re.search(r'\d+', word)) or any(w in prompt_words for w in text_numbers)):
                 return False
 
-
-        # for key in matched_keys:
-        #     if key in ["replicas", "container_port", "service_port"]:
-        #         if not any(word.isdigit() for word in prompt_words if re.search(r'\d+', word)):
-        #             return False
         elif key in ["cpu_request", "cpu_limit"]:
             if not re.search(r'\d+m?', prompt_lower):
                 return False
