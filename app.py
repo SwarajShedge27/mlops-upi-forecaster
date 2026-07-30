@@ -130,13 +130,25 @@ if uploaded_file is not None:
 
     with col_param3:
         
-        ets_choices = ["ZZZ", "MMM", "AAA", "MNN", "ANN", "ZMN"]
+        # 1. Dictionary mapping raw codes to human-readable explanations
+        ETS_MODEL_DESCRIPTIONS = {
+            "ZZZ": "Auto-Select (Best Fit - Recommended)",
+            "MMM": "Fully Multiplicative (Exponential Trends & Proportional Variance)",
+            "AAA": "Fully Additive (Linear Trends & Constant Variance)",
+            "MNN": "Multiplicative Error, No Trend, No Seasonality (Simple SES)",
+            "ANN": "Additive Error, No Trend, No Seasonality (Simple SES)",
+            "ZMN": "Auto Error with Multiplicative Trend, No Seasonality"
+        }
+
+        # 2. Selectbox using format_func to clean the dropdown options
         model_type = st.selectbox(
             "AutoETS Model Type",
-            ets_choices,
+            options=list(ETS_MODEL_DESCRIPTIONS.keys()),
             index=0,
-            help="ZZZ is automatic selection. MMM is Multiplicative, AAA is Additive. MNN/ANN represents Simple Exponential Smoothing."
+            format_func=lambda x: f"{x} - {ETS_MODEL_DESCRIPTIONS[x]}",
+            help="ETS models represent Error, Trend, and Seasonality configurations. 'A' stands for Additive, 'M' for Multiplicative, and 'Z' for Auto-Selection."
         )
+
 
     st.markdown("---")
 
